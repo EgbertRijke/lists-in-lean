@@ -328,47 +328,76 @@ def remove_last {A : Type u} : list A → list A
 /- Removing the last element of the list is of course taking the reverse of the tail of the 
    reverse. -/
 
-theorem reverse_tail_reverse {A : Type u} : 
-    ∀ (x : list A), reverse (tail (reverse x)) = remove_last x
+theorem tail_concat' {A : Type u} :
+    ∀ (x  y : list A), 
+    tail (concat x y) = concat (tail x) (tail (concat (last x) y))
+| nil y := rfl
+| (cons a nil) y := rfl 
+| (cons a (cons a' x')) y :=
+    calc
+    tail (concat (cons a (cons a' x')) y) 
+        = concat (cons a' x') y : rfl
+    ... = cons a' (tail (concat (cons a' x') y)) : rfl
+    ... = cons a' (concat (tail (cons a' x')) (tail (concat (last (cons a' x')) y))) : by rw tail_concat' 
+    ... = concat (cons a' x') (tail (concat (last (cons a' x')) y)) : rfl 
+    ... = concat (tail (cons a (cons a' x'))) (tail (concat (last (cons a (cons a' x'))) y)) : rfl
+
+def cons' {A : Type u} (x : list A) (a : A) : list A :=
+concat x (unit a)
+
+theorem last_cons' {A : Type u} : 
+    ∀ (x : list A) (a : A), last (cons' x a) = unit a
+| nil a := rfl
+| (cons a' nil) a := rfl
+| (cons a' (cons a'' x'')) a :=
+    calc
+    last (cons' (cons a' (cons a'' x'')) a) 
+        = last (cons a' (cons a'' (concat x'' (unit a)))) : rfl
+    ... = last (cons a'' (concat x'' (unit a))) : rfl 
+    ... = last (cons' (cons a'' x'') a) : rfl 
+    ... = unit a : by rw last_cons'  
+
+theorem tail_reverse {A : Type u} : 
+    ∀ (x : list A), tail (reverse x) = reverse (remove_last x)
 | nil := rfl
 | (cons a nil) := rfl 
-| (cons a (cons a' x')) := 
+| (cons a (cons a' x')) :=
     calc
-    reverse (tail (reverse (cons a (cons a' x'))))
-        = reverse (tail (concat (concat (reverse x') (unit a')) (unit a))) : rfl 
-    ... = _ : _ 
+    tail (reverse (cons a (cons a' x')))
+        = tail (concat (reverse (cons a' x')) (unit a)) : rfl 
+    ... = concat 
+            ( tail (reverse (cons a' x'))) 
+            ( tail (concat (last (reverse (cons a' x'))) (unit a))) : by rw tail_concat' 
+    ... = concat 
+            ( tail (reverse (cons a' x')))
+            ( tail (concat (last (concat (reverse x') (unit a'))) (unit a))) : rfl
+    ... = concat 
+            ( tail (reverse (cons a' x')))
+            ( tail (concat (last (cons' (reverse x') a')) (unit a))) : rfl
+    ... = concat
+            ( tail (reverse (cons a' x')))
+            ( tail (concat (unit a') (unit a))) : by rw last_cons' 
+    ... = concat (tail (reverse (cons a' x'))) (unit a) : rfl
+    ... = concat (reverse (remove_last (cons a' x'))) (unit a) : by rw tail_reverse
+    ... = reverse (cons a (remove_last (cons a' x'))) : rfl
+    ... = reverse (remove_last (cons a (cons a' x'))) : rfl
 
-/- Next, we study read and write operations on lists -/
-
-def read {A : Type u} : list A → ℕ → list A
-| nil 0 := nil
-| nil (n + 1) := nil
-| (cons a x) 0 := unit a 
-| (cons a x) (n + 1) := read x n 
-
-def insert {A : Type u} : list A → ℕ → A → list A
-| nil 0 s := unit s
-| nil (n+1) s := nil
-| (cons a x) 0 s := cons s (cons a x) 
-| (cons a x) (n+1) s := cons a (insert x n s)  
-
-def overwrite {A : Type u} : list A → ℕ → A → list A
-| nil n s := nil 
-| (cons a x) 0 s := cons s x 
-| (cons a x) (n+1) s := cons a (overwrite x n s)  
-
-def remove {A : Type u} : list A → ℕ → list A 
-| nil n := nil
-| (cons a x) 0 := x
-| (cons a x) (n + 1) := cons a (remove x n)
-
-end list
+theorem remove_last_reverse {A : Type u} (x : list A):
+    remove_last (reverse x) = reverse (tail x) := 
+calc
+remove_last (reverse x)
+    = reverse (reverse (remove_last (reverse x))) : by rw reverse_reverse
+... = reverse (tail (reverse (reverse x))) : by rw tail_reverse
+... = reverse (tail x) : by {symmetry, rw reverse_reverse}
 
 /- Next, we study lists of a fixed length. -/
 
 inductive list_of_length (A : Type u) : ℕ → Type u 
 | nil : list_of_length 0
 | cons : ∀ (n : ℕ), A → list_of_length n → list_of_length (n+1)
+
+def Matrix (m n : ℕ) (A : Type u) : Type u :=
+list_of_length (list_of_length A n) m
 
 namespace list_of_length
 
@@ -386,18 +415,29 @@ def tail {A : Type u} :
 | n (cons n' a x) := x 
 
 def transpose {A : Type u} : 
-    ∀ (m n : ℕ), list_of_length (list_of_length A n) m → list_of_length (list_of_length A m) n
+    ∀ (m n : ℕ), Matrix m n A → Matrix n m A
 | 0 0 nil := nil
 | 0 (n+1) nil := cons n nil (transpose 0 n nil)
 | (m+1) 0 (cons m' nil x) := nil 
-| (m+1) (n+1) (cons m' a x) := 
+| (m+1) (n+1) (cons m' (cons n' a y) x) := 
     cons n 
-        (cons m' (head n a) (functor (head n) m' x)) 
-        ( transpose (m+1) n (cons m' (tail n a) (functor (tail n) m' x)))
+        ( cons m' a (functor (head n) m' x)) 
+        ( transpose (m+1) n (cons m' y (functor (tail n) m' x)))
+
+theorem transpose_nil {A : Type u} :
+    ∀ (m : ℕ) (x : Matrix m 0 A), transpose m 0 x = nil 
+| 0 nil := rfl
+| (m+1) (cons m' nil x) :=
+    calc
+    transpose (m+1) 0 (cons m' nil x) 
+        = nil : rfl
+
+theorem functor_head_transpose {A : Type u} :
+    ∀ (m n : ℕ) (x : Matrix (m+1) (n+1) A),
+    functor (head m) (n+1) (transpose (m+1) (n+1) x) = head m x := sorry
 
 theorem transpose_transpose {A : Type u} :
-    ∀ (m n : ℕ), ∀ (x : list_of_length (list_of_length A n) m), 
-    transpose n m (transpose m n x) = x 
+    ∀ (m n : ℕ) (x : Matrix m n A), transpose n m (transpose m n x) = x 
 | 0 0 nil := rfl 
 | 0 (n+1) nil := rfl
 | (m+1) 0 (cons m' nil x) := 
@@ -405,10 +445,36 @@ theorem transpose_transpose {A : Type u} :
     transpose 0 (m+1) (transpose (m+1) 0 (cons m' nil x))
         = transpose 0 (m+1) nil : rfl
     ... = cons m' nil (transpose 0 m' nil) : rfl 
-    ... = cons m' nil (transpose 0 m' (transpose m' 0 x)) : rfl
-    ... = cons m' nil x : by rw transpose_transpose 
-    ... = 
+    ... = cons m' nil (transpose 0 m' (transpose m' 0 x)) : by rw transpose_nil 
+    ... = cons m' nil x : by rw transpose_transpose
+| (m+1) (n+1) (cons m' (cons n' a y) x) :=
+    calc
+    transpose (n+1) (m+1) (transpose (m+1) (n+1) (cons m' (cons n' a y) x)) 
+        = transpose (n+1) (m+1) 
+            ( cons n 
+                ( cons m' a (functor (head n) m' x)) 
+                ( transpose (m+1) n (cons m' y (functor (tail n) m' x)))) : rfl
+    ... = cons m 
+            ( cons n' a 
+                ( functor (head m) n' 
+                    ( transpose (m+1) n (cons m' y (functor (tail n) m' x))))) 
+            ( transpose (n+1) m 
+                ( cons n' 
+                    ( functor (head n) m' x) 
+                    ( functor (tail m) n' 
+                        ( transpose (m+1) n (cons m' y (functor (tail n) m' x)))))) : rfl
+    ... = cons m 
+            ( ( functor (head m) (n'+1) 
+                 (cons n' _ ( transpose (m+1) n (cons m' y (functor (tail n) m' x)))))) 
+            ( transpose (n+1) m 
+                ( cons n' 
+                    ( functor (head n) m' x) 
+                    ( functor (tail m) n' 
+                        ( transpose (m+1) n (cons m' y (functor (tail n) m' x)))))) : _
+    ... = (cons m' (cons n' a y) x) : _
 
 end list_of_length
+
+end list 
 
 end logika_v_racunalnistvu
