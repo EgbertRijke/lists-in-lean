@@ -467,7 +467,22 @@ theorem eq_nil_horizontal {A : Type u} :
 
 def cons_vertical {A : Type u} {m n : ℕ} :
     list_of_length A n → Matrix m n A → Matrix (m+1) n A :=
-cons m
+    cons m
+
+theorem top_row_cons_vertical 
+    {A : Type u} {m n : ℕ} (x : list_of_length A n) (M : Matrix m n A) :
+    top_row (cons_vertical x M) = x := 
+rfl 
+
+theorem left_colum_cons_vertical {A : Type u} :
+    ∀ {m n : ℕ} (x : list_of_length A (n+1)) (M : Matrix m (n+1) A),
+    left_column (cons_vertical x M) = cons m (head n x) (left_column M)
+| m n (cons n' a x) M := rfl 
+
+theorem eta_vertical {A : Type u} :
+    ∀ {m n : ℕ} (M : Matrix (m+1) n A), 
+    cons_vertical (top_row M) (tail_vertical M) = M
+| m n (cons _ x M) := rfl 
 
 /- cons_horizontal adds a new column from the left. -/
 
@@ -477,6 +492,45 @@ def cons_horizontal {A : Type u} :
 | (m+1) n (cons m' a x) M := 
     cons m (cons n a (top_row M)) (cons_horizontal x (tail_vertical M))
 
+theorem left_column_cons_horizontal {A : Type u} :
+    ∀ {m n : ℕ} (x : list_of_length A m) (M : Matrix m n A),
+    left_column (cons_horizontal x M) = x 
+| 0 n nil M := rfl 
+| (m+1) n (cons m' a x) M := 
+    calc
+    left_column (cons_horizontal (cons m' a x) M)
+        = cons m a (left_column (cons_horizontal x (tail_vertical M))) : rfl  
+    ... = cons m a x : by rw left_column_cons_horizontal 
+
+theorem top_row_cons_horizontal {A : Type u} :
+    ∀ {m n : ℕ} (x : list_of_length A (m+1)) (M : Matrix (m+1) n A),
+    top_row (cons_horizontal x M) = cons n (head m x) (top_row M)
+| m n (cons m' a x) (cons m'' y M) := rfl 
+
+theorem tail_vertical_cons_horizontal {A : Type} :
+    ∀ {m n : ℕ} (x : list_of_length A (m+1)) (M : Matrix (m+1) n A),
+    tail_vertical (cons_horizontal x M) = cons_horizontal (tail m x) (tail_vertical M)
+| m n (cons m' a x) (cons m'' y M) := rfl 
+
+theorem eta_horizontal {A : Type u} :
+    ∀ {m n : ℕ} (M : Matrix m (n+1) A),
+    cons_horizontal (left_column M) (tail_horizontal M) = M 
+| 0 n nil := rfl
+| (m+1) n (cons m' (cons n' a x) M) :=
+    calc
+    cons_horizontal (left_column (cons m (cons n a x) M)) (tail_horizontal (cons m (cons n a x) M))
+        = cons m (cons n a x) (cons_horizontal (left_column M) (tail_horizontal M)) : rfl
+    ... = cons m (cons n a x) M : by rw eta_horizontal M
+
+/- Next we show that if we add a row from the top as well as a column from the left, then it 
+   doesn't matter in which order we do that. -/
+
+theorem cons_horizontal_cons_vertical {A : Type u} :
+    ∀ {m n : ℕ} (a : A) (x : list_of_length A n) (y : list_of_length A m) (M : Matrix m n A),
+    cons_horizontal (cons m a y) (cons_vertical x M) 
+        = cons_vertical (cons n a x) (cons_horizontal y M) 
+| m n a x y M := rfl 
+
 /- We define the transposition of a matrix. -/
 
 def transpose {A : Type u} : 
@@ -484,8 +538,13 @@ def transpose {A : Type u} :
 | 0 n M := nil_horizontal
 | (m+1) n (cons m' x M) := cons_horizontal x (transpose M)
 
-/- The following two theorems show how transpose interacts with the basic operations on
+/- The following three theorems show how transpose interacts with the basic operations on
    matrices. These will help to show that transposition is an involution. -/
+
+theorem transpose_nil {A : Type u} :
+    ∀ {n : ℕ}, @transpose A 0 n nil = nil_horizontal 
+| 0 := rfl 
+| (n+1) := rfl 
 
 theorem transpose_cons_horizontal {A : Type u} :
     ∀ {m n : ℕ} (x : list_of_length A m) (M : Matrix m n A),
@@ -513,12 +572,14 @@ theorem transpose_transpose {A : Type u} :
 | (m+1) 0 M := 
     calc
     transpose (transpose M) 
-        = nil_horizontal : rfl
+        = transpose nil : rfl 
+    ... = nil_horizontal : by rw transpose_nil
     ... = M : by rw eq_nil_horizontal M
 | (m+1) (n+1) (cons _ x M) := 
     calc
     transpose (transpose (cons _ x M))
-        = transpose (cons_horizontal x (transpose M)) : rfl
+        = transpose (transpose (cons_vertical x M)) : rfl 
+    ... = transpose (cons_horizontal x (transpose M)) : by rw transpose_cons_vertical
     ... = cons_vertical x (transpose (transpose M)) : by rw transpose_cons_horizontal
     ... = cons_vertical x M : by rw transpose_transpose
     ... = cons _ x M : rfl
