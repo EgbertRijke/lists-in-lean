@@ -390,16 +390,18 @@ remove_last (reverse x)
 ... = reverse (tail (reverse (reverse x))) : by rw tail_reverse
 ... = reverse (tail x) : by {symmetry, rw reverse_reverse}
 
+end list 
+
 /- Next, we study lists of a fixed length. -/
 
 inductive list_of_length (A : Type u) : ℕ → Type u 
 | nil : list_of_length 0
 | cons : ∀ (n : ℕ), A → list_of_length n → list_of_length (n+1)
 
-def Matrix (m n : ℕ) (A : Type u) : Type u :=
-list_of_length (list_of_length A n) m
-
 namespace list_of_length
+
+theorem eq_nil {A : Type u} : ∀ (x : list_of_length A 0), x = nil 
+| nil := rfl 
 
 def functor {A : Type u} {B : Type v} (f : A → B) :
     ∀ (n : ℕ), list_of_length A n → list_of_length B n 
@@ -414,67 +416,174 @@ def tail {A : Type u} :
     ∀ (n : ℕ), list_of_length A (n+1) → list_of_length A n 
 | n (cons n' a x) := x 
 
+/- Using lists of fixed length, we can define matrices. The type
+   Matrix m n A is the type of matrices with m rows and n columns
+   and with coefficients in A. -/
+
+def Matrix (m n : ℕ) (A : Type u) : Type u :=
+list_of_length (list_of_length A n) m
+
+def top_row {A : Type u} {m n : ℕ} : 
+    Matrix (m+1) n A → list_of_length A n := 
+head m 
+
+def tail_vertical {A : Type u} {m n : ℕ} : 
+    Matrix (m+1) n A → Matrix m n A :=
+tail m 
+
+def left_column {A : Type u} {m n : ℕ} :
+    Matrix m (n+1) A → list_of_length A m := 
+functor (head n) m
+
+def tail_horizontal {A : Type u} {m n : ℕ} : 
+    Matrix m (n+1) A → Matrix m n A :=
+functor (tail n) m
+
+/- Since matrices are rectangular, we have a horizontal as well as vertical empty matrices. -/
+
+def nil_vertical {A : Type u} {n : ℕ} : Matrix 0 n A := nil
+
+theorem eq_nil_vertical {A : Type u} : 
+    ∀ {n : ℕ} (x : Matrix 0 n A), x = nil_vertical
+| 0 nil := rfl 
+| (n+1) nil := rfl  
+
+def nil_horizontal {A : Type u} : ∀ {m : ℕ}, Matrix m 0 A 
+| 0 := nil 
+| (m+1) := cons m nil nil_horizontal
+
+theorem eq_nil_horizontal {A : Type u} : 
+    ∀ {m : ℕ} (x : Matrix m 0 A), x = nil_horizontal
+| 0 nil := rfl 
+| (m+1) (cons m' nil M) := 
+    calc
+    cons m nil M 
+        = cons m nil nil_horizontal : by rw eq_nil_horizontal M  
+    ... = nil_horizontal : rfl
+
+/- Similarly, there is a horizontal cons and a vertical cons. -/
+
+/- cons_vertical adds a new row from the top. -/
+
+def cons_vertical {A : Type u} {m n : ℕ} :
+    list_of_length A n → Matrix m n A → Matrix (m+1) n A :=
+    cons m
+
+theorem top_row_cons_vertical 
+    {A : Type u} {m n : ℕ} (x : list_of_length A n) (M : Matrix m n A) :
+    top_row (cons_vertical x M) = x := 
+rfl 
+
+theorem left_colum_cons_vertical {A : Type u} :
+    ∀ {m n : ℕ} (x : list_of_length A (n+1)) (M : Matrix m (n+1) A),
+    left_column (cons_vertical x M) = cons m (head n x) (left_column M)
+| m n (cons n' a x) M := rfl 
+
+theorem eta_vertical {A : Type u} :
+    ∀ {m n : ℕ} (M : Matrix (m+1) n A), 
+    cons_vertical (top_row M) (tail_vertical M) = M
+| m n (cons _ x M) := rfl 
+
+/- cons_horizontal adds a new column from the left. -/
+
+def cons_horizontal {A : Type u} :
+    ∀ {m n : ℕ}, list_of_length A m → Matrix m n A → Matrix m (n+1) A 
+| 0 n nil M := nil
+| (m+1) n (cons m' a x) M := 
+    cons m (cons n a (top_row M)) (cons_horizontal x (tail_vertical M))
+
+theorem left_column_cons_horizontal {A : Type u} :
+    ∀ {m n : ℕ} (x : list_of_length A m) (M : Matrix m n A),
+    left_column (cons_horizontal x M) = x 
+| 0 n nil M := rfl 
+| (m+1) n (cons m' a x) M := 
+    calc
+    left_column (cons_horizontal (cons m' a x) M)
+        = cons m a (left_column (cons_horizontal x (tail_vertical M))) : rfl  
+    ... = cons m a x : by rw left_column_cons_horizontal 
+
+theorem top_row_cons_horizontal {A : Type u} :
+    ∀ {m n : ℕ} (x : list_of_length A (m+1)) (M : Matrix (m+1) n A),
+    top_row (cons_horizontal x M) = cons n (head m x) (top_row M)
+| m n (cons m' a x) (cons m'' y M) := rfl 
+
+theorem tail_vertical_cons_horizontal {A : Type} :
+    ∀ {m n : ℕ} (x : list_of_length A (m+1)) (M : Matrix (m+1) n A),
+    tail_vertical (cons_horizontal x M) = cons_horizontal (tail m x) (tail_vertical M)
+| m n (cons m' a x) (cons m'' y M) := rfl 
+
+theorem eta_horizontal {A : Type u} :
+    ∀ {m n : ℕ} (M : Matrix m (n+1) A),
+    cons_horizontal (left_column M) (tail_horizontal M) = M 
+| 0 n nil := rfl
+| (m+1) n (cons m' (cons n' a x) M) :=
+    calc
+    cons_horizontal (left_column (cons m (cons n a x) M)) (tail_horizontal (cons m (cons n a x) M))
+        = cons m (cons n a x) (cons_horizontal (left_column M) (tail_horizontal M)) : rfl
+    ... = cons m (cons n a x) M : by rw eta_horizontal M
+
+/- Next we show that if we add a row from the top as well as a column from the left, then it 
+   doesn't matter in which order we do that. -/
+
+theorem cons_horizontal_cons_vertical {A : Type u} :
+    ∀ {m n : ℕ} (a : A) (x : list_of_length A n) (y : list_of_length A m) (M : Matrix m n A),
+    cons_horizontal (cons m a y) (cons_vertical x M) 
+        = cons_vertical (cons n a x) (cons_horizontal y M) 
+| m n a x y M := rfl 
+
+/- We define the transposition of a matrix. -/
+
 def transpose {A : Type u} : 
-    ∀ (m n : ℕ), Matrix m n A → Matrix n m A
-| 0 0 nil := nil
-| 0 (n+1) nil := cons n nil (transpose 0 n nil)
-| (m+1) 0 (cons m' nil x) := nil 
-| (m+1) (n+1) (cons m' (cons n' a y) x) := 
-    cons n 
-        ( cons m' a (functor (head n) m' x)) 
-        ( transpose (m+1) n (cons m' y (functor (tail n) m' x)))
+    ∀ {m n : ℕ}, Matrix m n A → Matrix n m A
+| 0 n M := nil_horizontal
+| (m+1) n (cons m' x M) := cons_horizontal x (transpose M)
+
+/- The following three theorems show how transpose interacts with the basic operations on
+   matrices. These will help to show that transposition is an involution. -/
 
 theorem transpose_nil {A : Type u} :
-    ∀ (m : ℕ) (x : Matrix m 0 A), transpose m 0 x = nil 
-| 0 nil := rfl
-| (m+1) (cons m' nil x) :=
-    calc
-    transpose (m+1) 0 (cons m' nil x) 
-        = nil : rfl
+    ∀ {n : ℕ}, @transpose A 0 n nil = nil_horizontal 
+| 0 := rfl 
+| (n+1) := rfl 
 
-theorem functor_head_transpose {A : Type u} :
-    ∀ (m n : ℕ) (x : Matrix (m+1) (n+1) A),
-    functor (head m) (n+1) (transpose (m+1) (n+1) x) = head m x := sorry
+theorem transpose_cons_horizontal {A : Type u} :
+    ∀ {m n : ℕ} (x : list_of_length A m) (M : Matrix m n A),
+    transpose (cons_horizontal x M) = cons_vertical x (transpose M)
+| 0 n nil M := rfl 
+| (m+1) n (cons m' a x) (cons m'' y M) := 
+    calc
+    transpose (cons_horizontal (cons m' a x) (cons m'' y M))
+        = transpose (cons m (cons n a y) (cons_horizontal x M)) : rfl 
+    ... = cons_horizontal (cons n a y) (transpose (cons_horizontal x M)) : rfl 
+    ... = cons_horizontal (cons n a y) (cons_vertical x (transpose M)) : by rw transpose_cons_horizontal
+    ... = cons_vertical (cons m a x) (transpose (cons m y M)) : by reflexivity
+
+theorem transpose_cons_vertical {A : Type u} :
+    ∀ {m n : ℕ} (x : list_of_length A n) (M : Matrix m n A),
+    transpose (cons_vertical x M) = cons_horizontal x (transpose M)
+| m n x M := rfl 
+
+/- We finally show that transposition is an involution. -/
 
 theorem transpose_transpose {A : Type u} :
-    ∀ (m n : ℕ) (x : Matrix m n A), transpose n m (transpose m n x) = x 
-| 0 0 nil := rfl 
-| 0 (n+1) nil := rfl
-| (m+1) 0 (cons m' nil x) := 
-    calc 
-    transpose 0 (m+1) (transpose (m+1) 0 (cons m' nil x))
-        = transpose 0 (m+1) nil : rfl
-    ... = cons m' nil (transpose 0 m' nil) : rfl 
-    ... = cons m' nil (transpose 0 m' (transpose m' 0 x)) : by rw transpose_nil 
-    ... = cons m' nil x : by rw transpose_transpose
-| (m+1) (n+1) (cons m' (cons n' a y) x) :=
+    ∀ (m n : ℕ) (M : Matrix m n A), transpose (transpose M) = M
+| 0 0 nil := rfl
+| 0 (n+1) nil := rfl 
+| (m+1) 0 M := 
     calc
-    transpose (n+1) (m+1) (transpose (m+1) (n+1) (cons m' (cons n' a y) x)) 
-        = transpose (n+1) (m+1) 
-            ( cons n 
-                ( cons m' a (functor (head n) m' x)) 
-                ( transpose (m+1) n (cons m' y (functor (tail n) m' x)))) : rfl
-    ... = cons m 
-            ( cons n' a 
-                ( functor (head m) n' 
-                    ( transpose (m+1) n (cons m' y (functor (tail n) m' x))))) 
-            ( transpose (n+1) m 
-                ( cons n' 
-                    ( functor (head n) m' x) 
-                    ( functor (tail m) n' 
-                        ( transpose (m+1) n (cons m' y (functor (tail n) m' x)))))) : rfl
-    ... = cons m 
-            ( ( functor (head m) (n'+1) 
-                 (cons n' _ ( transpose (m+1) n (cons m' y (functor (tail n) m' x)))))) 
-            ( transpose (n+1) m 
-                ( cons n' 
-                    ( functor (head n) m' x) 
-                    ( functor (tail m) n' 
-                        ( transpose (m+1) n (cons m' y (functor (tail n) m' x)))))) : _
-    ... = (cons m' (cons n' a y) x) : _
+    transpose (transpose M) 
+        = transpose nil : rfl 
+    ... = nil_horizontal : by rw transpose_nil
+    ... = M : by rw eq_nil_horizontal M
+| (m+1) (n+1) (cons _ x M) := 
+    calc
+    transpose (transpose (cons _ x M))
+        = transpose (transpose (cons_vertical x M)) : rfl 
+    ... = transpose (cons_horizontal x (transpose M)) : by rw transpose_cons_vertical
+    ... = cons_vertical x (transpose (transpose M)) : by rw transpose_cons_horizontal
+    ... = cons_vertical x M : by rw transpose_transpose
+    ... = cons _ x M : rfl
 
 end list_of_length
-
-end list 
 
 end logika_v_racunalnistvu
