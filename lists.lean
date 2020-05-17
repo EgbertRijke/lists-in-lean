@@ -400,9 +400,6 @@ inductive list_of_length (A : Type u) : ℕ → Type u
 
 namespace list_of_length
 
-theorem eq_nil {A : Type u} : ∀ (x : list_of_length A 0), x = nil 
-| nil := rfl 
-
 def functor {A : Type u} {B : Type v} (f : A → B) :
     ∀ (n : ℕ), list_of_length A n → list_of_length B n 
 | 0 nil := nil
