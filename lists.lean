@@ -3,7 +3,8 @@ of Ljubljana. -/
 
 namespace logika_v_racunalnistvu 
 
-/- We typically want to be universe polymorphic in lean, so we introduce a universe variable u. -/
+/- We typically want to be universe polymorphic in lean, so we introduce all the universe
+   varialbes that we will need throughout this file. -/
 
 universes u v w 
 
@@ -130,8 +131,7 @@ theorem length_nil {A : Type u} :
     length (@nil A) = 0 := rfl
 
 theorem length_unit {A : Type u} (a : A) :
-    length (unit a) = 1 :=
-    rfl
+    length (unit a) = 1 := rfl
 
 theorem length_concat {A : Type u} :
     ∀ (x y : list A), length (concat x y) = length x + length y
@@ -190,7 +190,7 @@ theorem flatten_flatten {A : Type u} :
 
 /- Next, we prove the elementary properties of list reversal. -/
 
-theorem unit_reverse {A : Type u} (a : A) :
+theorem reverse_unit {A : Type u} (a : A) :
     reverse (unit a) = unit a := rfl 
 
 theorem length_reverse {A : Type u} : 
@@ -241,65 +241,73 @@ theorem reverse_reverse {A : Type u} :
     reverse (reverse (cons a x)) 
         = reverse (concat (reverse x) (unit a)) : rfl
     ... = concat (reverse (unit a)) (reverse (reverse x)) : by rw reverse_concat 
-    ... = concat (unit a) (reverse (reverse x)) : by rw unit_reverse
+    ... = concat (unit a) (reverse (reverse x)) : by rw reverse_unit
     ... = concat (unit a) x : by rw reverse_reverse
     ... = cons a x : rfl 
 
-/- The next topic of our study of lists is Heads and Tails -/
-
-def head {A : Type u} : list A → list A
-| nil := nil  
-| (cons a x) := unit a
+/- The next topic of our study of lists is Heads and Tails, and their
+   dual operations: taking and removing the last element of a list. -/
 
 /- Note that the type of head can't be list A → A, because we might apply head to the empty list
    In that case, we should allow for an exception. Instead of mapping to the coproduct A + 1, we 
    make give head the type list A → list A. -/
 
+def head {A : Type u} : list A → list A
+| nil := nil  
+| (cons a x) := unit a
+
 def tail {A : Type u} : list A → list A 
 | nil := nil 
 | (cons a x) := x 
-
-/- If we concatenate the head with the tail, we get the original list back -/
-
-def concat_head_tail {A : Type u} : 
-    ∀ (x : list A), concat (head x) (tail x) = x 
-| nil := rfl 
-| (cons a x) := rfl 
-
-theorem head_head {A : Type u} : 
-    ∀ (x : list A), head (head x) = head x
-| nil := rfl 
-| (cons a x) := rfl 
-
-theorem head_concat {A : Type u} : 
-    ∀ (x y : list A), head (concat x y) = head (concat (head x) (head y)) 
-| nil y := 
-    calc 
-    head (concat nil y) 
-        = head y : rfl 
-    ... = head (head y) : by rw head_head  
-    ... = head (concat (head nil) (head y)) : rfl 
-| (cons a x) y := rfl 
-
-theorem tail_concat {A : Type u} :
-    ∀ (x y : list A), tail (concat x y) = concat (tail x) (tail (concat (head x) y))
-| nil y := rfl 
-| (cons a x) y := 
-    calc 
-    tail (concat (cons a x) y)
-        = tail (cons a (concat x y)) : rfl
-    ... = tail (cons a (concat (tail (cons a x)) y)) : rfl 
-    ... = concat (tail (cons a x)) y : rfl 
-    ... = concat (tail (cons a x)) (tail (concat (head (cons a x)) y)) : rfl 
-
-/- Dual to taking the head of a list, we may take the last element of a list. -/
 
 def last {A : Type u} : list A → list A
 | nil := nil  
 | (cons a nil) := unit a 
 | (cons a (cons a' x')) := last (cons a' x')
 
-/- The last element is of course the head of the reversed list. -/
+def remove_last {A : Type u} : list A → list A
+| nil := nil
+| (cons a nil) := nil 
+| (cons a (cons a' x')) := cons a (remove_last (cons a' x')) 
+
+/- We also define the variant of cons that adds an element from the right -/
+
+def cons' {A : Type u} (x : list A) (a : A) : list A :=
+concat x (unit a)
+
+theorem last_cons' {A : Type u} : 
+    ∀ (x : list A) (a : A), last (cons' x a) = unit a
+| nil a := rfl
+| (cons a' nil) a := rfl
+| (cons a' (cons a'' x'')) a :=
+    calc
+    last (cons' (cons a' (cons a'' x'')) a) 
+        = last (cons a' (cons a'' (concat x'' (unit a)))) : rfl
+    ... = last (cons a'' (concat x'' (unit a))) : rfl 
+    ... = last (cons' (cons a'' x'') a) : rfl 
+    ... = unit a : by rw last_cons'  
+
+/- We prove some basic properties about heads and tails. -/
+
+theorem head_concat {A : Type u} : 
+    ∀ (x y : list A), head (concat x y) = head (concat (head x) (head y)) 
+| nil nil := rfl
+| nil (cons b y) := rfl 
+| (cons a x) y := rfl 
+
+theorem tail_concat {A : Type u} :
+    ∀ (x  y : list A), 
+    tail (concat x y) = concat (tail x) (tail (concat (last x) y))
+| nil y := rfl
+| (cons a nil) y := rfl 
+| (cons a (cons a' x')) y :=
+    calc
+    tail (concat (cons a (cons a' x')) y) 
+        = concat (cons a' x') y : rfl
+    ... = cons a' (tail (concat (cons a' x') y)) : rfl
+    ... = cons a' (concat (tail (cons a' x')) (tail (concat (last (cons a' x')) y))) : by rw tail_concat 
+    ... = concat (cons a' x') (tail (concat (last (cons a' x')) y)) : rfl 
+    ... = concat (tail (cons a (cons a' x'))) (tail (concat (last (cons a (cons a' x'))) y)) : rfl
 
 theorem head_reverse {A : Type u} : 
     ∀ (x : list A), head (reverse x) = last x 
@@ -318,44 +326,13 @@ theorem head_reverse {A : Type u} :
     ... = last (cons a' x') : by rw head_reverse
     ... = last (cons a (cons a' x')) : rfl
 
-/- Dual to taking the tail of a list, we may remove the last element of the list. -/
-
-def remove_last {A : Type u} : list A → list A
-| nil := nil
-| (cons a nil) := nil 
-| (cons a (cons a' x')) := cons a (remove_last (cons a' x')) 
-
-/- Removing the last element of the list is of course taking the reverse of the tail of the 
-   reverse. -/
-
-theorem tail_concat' {A : Type u} :
-    ∀ (x  y : list A), 
-    tail (concat x y) = concat (tail x) (tail (concat (last x) y))
-| nil y := rfl
-| (cons a nil) y := rfl 
-| (cons a (cons a' x')) y :=
+theorem last_reverse {A : Type u} :
+    ∀ (x : list A), last (reverse x) = head x
+| x :=
     calc
-    tail (concat (cons a (cons a' x')) y) 
-        = concat (cons a' x') y : rfl
-    ... = cons a' (tail (concat (cons a' x') y)) : rfl
-    ... = cons a' (concat (tail (cons a' x')) (tail (concat (last (cons a' x')) y))) : by rw tail_concat' 
-    ... = concat (cons a' x') (tail (concat (last (cons a' x')) y)) : rfl 
-    ... = concat (tail (cons a (cons a' x'))) (tail (concat (last (cons a (cons a' x'))) y)) : rfl
-
-def cons' {A : Type u} (x : list A) (a : A) : list A :=
-concat x (unit a)
-
-theorem last_cons' {A : Type u} : 
-    ∀ (x : list A) (a : A), last (cons' x a) = unit a
-| nil a := rfl
-| (cons a' nil) a := rfl
-| (cons a' (cons a'' x'')) a :=
-    calc
-    last (cons' (cons a' (cons a'' x'')) a) 
-        = last (cons a' (cons a'' (concat x'' (unit a)))) : rfl
-    ... = last (cons a'' (concat x'' (unit a))) : rfl 
-    ... = last (cons' (cons a'' x'') a) : rfl 
-    ... = unit a : by rw last_cons'  
+    last (reverse x)
+        = head (reverse (reverse x)) : by rw head_reverse
+    ... = head x : by rw reverse_reverse
 
 theorem tail_reverse {A : Type u} : 
     ∀ (x : list A), tail (reverse x) = reverse (remove_last x)
@@ -367,7 +344,7 @@ theorem tail_reverse {A : Type u} :
         = tail (concat (reverse (cons a' x')) (unit a)) : rfl 
     ... = concat 
             ( tail (reverse (cons a' x'))) 
-            ( tail (concat (last (reverse (cons a' x'))) (unit a))) : by rw tail_concat' 
+            ( tail (concat (last (reverse (cons a' x'))) (unit a))) : by rw tail_concat 
     ... = concat 
             ( tail (reverse (cons a' x')))
             ( tail (concat (last (concat (reverse x') (unit a'))) (unit a))) : rfl
@@ -390,9 +367,11 @@ remove_last (reverse x)
 ... = reverse (tail (reverse (reverse x))) : by rw tail_reverse
 ... = reverse (tail x) : by {symmetry, rw reverse_reverse}
 
+/- This concludes our coverage of lists in Lean. -/
+
 end list 
 
-/- Next, we study lists of a fixed length. -/
+/- Next, we study lists of a fixed length. They are a natural example of a dependent type.-/
 
 inductive list_of_length (A : Type u) : ℕ → Type u 
 | nil : list_of_length 0
